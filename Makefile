@@ -26,7 +26,7 @@ include $(THEOS_MAKE_PATH)/library.mk
 TOOL_NAME = libhookerTest
 libhookerTest_FILES = $(libhooker_FILES) $(libblackjack_FILES) unittest/main.c
 libhookerTest_CFLAGS = -Ilibhooker/include/apple -Ilibhooker/include/ -DTHEOS -fvisibility=hidden
-libhookerTest_CCFLAGS = -Ilibhooker/include/apple -Ilibhooker/include/ -DTHEOS -fvisibility=hidden -std=c++11
+libhookerTest_CCFLAGS = -Ilibhooker/include/apple -Ilibhooker/include/ -DTHEOS -fvisibility=hidden -std=c++11 -fno-modules
 libhookerTest_LDFLAGS = -lobjc
 libhookerTest_CODESIGN_FLAGS = -Sunittest/webcontent.xml
 
