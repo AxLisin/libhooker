@@ -6,7 +6,7 @@ LIBRARY_NAME = libhooker libblackjack libsubstitute libsubstrate
 
 libhooker_FILES = libhooker/dyld/dyldSyms.c libhooker/dyld/dyld4Find.c libhooker/misc/misc.c libhooker/as-aarch64/as-aarch64.c libhooker/disas-aarch64/disas-aarch64.c libhooker/mem/writeMem-darwin.c libhooker/mem/shadowMem.c libhooker/mem/shadowMem.cpp libhooker/func/funcHook.c libhooker/mach/machWrapper.c
 libhooker_CFLAGS = -Ilibhooker/include/apple -Ilibhooker/include/ -DTHEOS -fvisibility=hidden
-libhooker_CCFLAGS = -Ilibhooker/include/apple -Ilibhooker/include/ -DTHEOS -fvisibility=hidden -std=c++11
+libhooker_CCFLAGS = -Ilibhooker/include/apple -Ilibhooker/include/ -DTHEOS -fvisibility=hidden -std=c++11 -fno-modules
 libhooker_LINKAGE_TYPE = both
 
 libblackjack_FILES = libblackjack/objc/objc.c libhooker/as-aarch64/as-aarch64.c
