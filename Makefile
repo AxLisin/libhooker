@@ -11,15 +11,15 @@ libhooker_LINKAGE_TYPE = both
 
 libblackjack_FILES = libblackjack/objc/objc.c libhooker/as-aarch64/as-aarch64.c
 libblackjack_CFLAGS = -Ilibhooker/include/apple -Ilibhooker/include/ -fvisibility=hidden
-libblackjack_LDFLAGS = -lobjc -lhooker -L$(THEOS_OBJ_DIR)
+libblackjack_LDFLAGS = -lobjc -lhooker -L$(THEOS_OBJ_DIR) -Wl,-not_for_dyld_shared_cache
 
 libsubstitute_FILES = substitute-shim/substitute-shim.c
 libsubstitute_CFLAGS = -Ilibhooker/include/ -Ilibblackjack/include/
-libsubstitute_LDFLAGS = -lhooker -lblackjack -L$(THEOS_OBJ_DIR)
+libsubstitute_LDFLAGS = -lhooker -lblackjack -L$(THEOS_OBJ_DIR) -Wl,-not_for_dyld_shared_cache
 
 libsubstrate_FILES = substrate-shim/substrate-shim.c
 libsubstrate_CFLAGS = -Ilibhooker/include/ -Ilibblackjack/include/
-libsubstrate_LDFLAGS = -lhooker -lblackjack -L$(THEOS_OBJ_DIR) -lobjc
+libsubstrate_LDFLAGS = -lhooker -lblackjack -L$(THEOS_OBJ_DIR) -lobjc -Wl,-not_for_dyld_shared_cache
 
 include $(THEOS_MAKE_PATH)/library.mk
 
