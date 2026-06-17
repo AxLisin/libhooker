@@ -5,68 +5,66 @@ on:
     branches: [ master, main ]
     paths:
       - 'libblackjack/**'
-      - 'libhooker/as-aarch64/**'
-      - 'libhooker/include/**'
+      - 'libhooker/**'
       - 'Makefile'
       - '.github/workflows/build-libblackjack.yml'
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
-    name: Build libblackjack.dylib (iOS 26.5)
-    runs-on: macos-latest   # Xcode 26 is pre-installed here
+    name: Build libblackjack.dylib (iOS 26)
+    runs-on: macos-latest
 
     steps:
-      # ── 1. Checkout your fork ────────────────────────────────────────────
+      # ── 1. Checkout ───────────────────────────────────────────────────────
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2   # Node 24 compatible
 
-      # ── 2. Print Xcode / SDK info for debugging ──────────────────────────
-      - name: Show available Xcode SDKs
-        run: xcodebuild -showsdks
-
-      # ── 3. Locate the iOS 26 SDK bundled with Xcode ──────────────────────
-      # GitHub's macos-latest runner ships with Xcode 26 which includes the
-      # iPhoneOS26.sdk. We expose its path so Theos can find it.
-      - name: Locate iOS 26 SDK
+      # ── 2. Locate the iOS SDK bundled with Xcode ─────────────────────────
+      - name: Locate iOS SDK
         run: |
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || true)
-          SDK_VER=$(xcrun --sdk iphoneos --show-sdk-version 2>/dev/null || true)
-          echo "Detected SDK: $SDK_VER at $SDK_PATH"
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          SDK_VER=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "SDK: $SDK_VER at $SDK_PATH"
           echo "XCODE_SDK_PATH=$SDK_PATH" >> $GITHUB_ENV
-          echo "XCODE_SDK_VER=$SDK_VER" >> $GITHUB_ENV
+          echo "XCODE_SDK_VER=$SDK_VER"  >> $GITHUB_ENV
 
-      # ── 4. Install Theos ─────────────────────────────────────────────────
+      # ── 3. Install ldid (fake-codesign tool Theos requires) ───────────────
+      # Theos calls ldid to sign dylibs during the build. Without it the
+      # signing step exits 127 (command not found) and the build fails.
+      - name: Install ldid
+        run: brew install ldid
+
+      # ── 4. Install Theos ──────────────────────────────────────────────────
       - name: Set up Theos
         run: |
           export THEOS=~/theos
           echo "THEOS=$THEOS" >> $GITHUB_ENV
           git clone --recursive https://github.com/theos/theos.git $THEOS
 
-      # ── 5. Wire the Xcode SDK into Theos ─────────────────────────────────
-      # Theos looks for SDKs under $THEOS/sdks/iPhoneOS<ver>.sdk.
-      # We symlink the Xcode-bundled SDK so Theos resolves TARGET correctly.
+      # ── 5. Wire the Xcode iOS SDK into Theos ─────────────────────────────
       - name: Link iOS SDK into Theos
         run: |
           SDK_NAME="iPhoneOS${XCODE_SDK_VER}.sdk"
           mkdir -p $THEOS/sdks
           ln -sf "$XCODE_SDK_PATH" "$THEOS/sdks/$SDK_NAME"
-          echo "Linked $XCODE_SDK_PATH -> $THEOS/sdks/$SDK_NAME"
-          ls $THEOS/sdks/
+          echo "Linked: $THEOS/sdks/$SDK_NAME"
 
-      # ── 6. Install llvm/clang toolchain (arm64/arm64e cross-compiler) ────
-      # The Xcode clang on macOS runners can target arm64/arm64e already.
-      # No extra toolchain install needed for Darwin targets.
-      - name: Verify clang target support
-        run: clang -arch arm64 -arch arm64e -v 2>&1 | head -5
+      # ── 6. Fix: -fno-modules to silence extern-C module-import error ──────
+      - name: Patch Makefile — add -fno-modules to C++ flags
+        run: |
+          sed -i '' \
+            's/\(libhooker_CCFLAGS.*-std=c++11\)/\1 -fno-modules/' \
+            Makefile
+          grep libhooker_CCFLAGS Makefile
 
-      # ── 7. Build libblackjack ─────────────────────────────────────────────
-      # Targets iOS 26.0 as the minimum (covers 26.5 and later).
-      # libblackjack depends on libhooker at link time, so we build both;
-      # only libblackjack.dylib will be uploaded as the artifact.
-      - name: Build libblackjack
+      # ── 7. Build ──────────────────────────────────────────────────────────
+      - name: Build
         run: |
           export THEOS=~/theos
           make \
@@ -74,30 +72,28 @@ jobs:
             TARGET="iphone:${XCODE_SDK_VER}:26.0" \
             -j$(sysctl -n hw.logicalcpu)
 
-      # ── 8. Locate the built dylib ─────────────────────────────────────────
+      # ── 8. Locate and inspect the dylib ───────────────────────────────────
       - name: Locate output dylib
         run: |
           find . -name "libblackjack.dylib" | tee /tmp/dylib_paths.txt
           DYLIB=$(head -1 /tmp/dylib_paths.txt)
           echo "DYLIB_PATH=$DYLIB" >> $GITHUB_ENV
-          # Print binary info for confirmation
           file "$DYLIB"
-          otool -l "$DYLIB" | grep -A3 'LC_VERSION_MIN\|LC_BUILD_VERSION' || true
+          otool -l "$DYLIB" | grep -A4 'LC_BUILD_VERSION\|LC_VERSION_MIN' || true
 
       # ── 9. Upload artifact ────────────────────────────────────────────────
       - name: Upload libblackjack.dylib
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.4.3   # Node 24 compatible
         with:
           name: libblackjack-ios26-dylib
           path: ${{ env.DYLIB_PATH }}
           if-no-files-found: error
           retention-days: 30
 
-      # ── 10. (Optional) Create a GitHub Release on version tags ────────────
-      # Tag your commit like `v1.0.0` to trigger an automatic release.
+      # ── 10. Create a GitHub Release on version tags ───────────────────────
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.1.0
         with:
           files: ${{ env.DYLIB_PATH }}
           generate_release_notes: true
